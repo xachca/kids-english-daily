@@ -7,12 +7,14 @@ export default function Games(){
   const [data, setData] = useState(null)
   const [pairs, setPairs] = useState([])
   const [done, setDone] = useState(0)
+
   useEffect(()=>{ 
     fetchDaily(date).then(d=>{
       setData(d)
       setPairs(d.words.map(w=>({word:w.text, image:w.image, matched:false})))
     }) 
   },[date])
+
   if (!data) return <div style={{padding:16}}>Loading…</div>
 
   function onDrop(ev, word){
@@ -21,12 +23,18 @@ export default function Games(){
     if (payload===word){
       setPairs(ps => ps.map(p=> p.word===word ? {...p, matched:true} : p))
       setDone(x=>x+1); toast('Great job!')
-    }else{ toast('Almost!') }
+    }else{
+      toast('Almost!')
+    }
   }
-  const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+
+  // 关键修改：使用 BASE_URL + new URL 更稳健地拼接图片路径
+  const base = import.meta.env.BASE_URL
+
   return (
     <div style={{padding:16}}>
       <h2>🎮 配对游戏</h2>
+
       <div className="grid">
         <div className="card">
           <h3>拖动单词到正确的图片</h3>
@@ -40,6 +48,7 @@ export default function Games(){
             ))}
           </div>
         </div>
+
         <div className="card">
           <h3>图片区</h3>
           <div className="grid">
@@ -48,18 +57,24 @@ export default function Games(){
                    onDragOver={(e)=>e.preventDefault()}
                    onDrop={(e)=>onDrop(e,p.word)}
                    style={{border:'2px dashed #ccc', borderRadius:12, padding:8}}>
-                   <img className="img" src={base + p.image} alt={p.word}/>
+                   <img
+                     className="img"
+                     src={new URL(p.image.replace(/^\//,''), base).toString()}
+                     alt={p.word}
+                   />
                    <div style={{textAlign:'center'}}>{p.matched?'✅':'⬇️ 把单词拖到这里'}</div>
               </div>
             ))}
           </div>
         </div>
       </div>
+
       <h2 style={{marginTop:24}}>🔍 找一找</h2>
       <div className="card">
         <div>{data.games.find(g=>g.type==='find-it')?.prompt}</div>
         <button className="btn" onClick={()=> toast('You found it! Awesome!')}>我找到了！</button>
       </div>
+
       <div style={{marginTop:12}}>进度：{done}/{pairs.length}</div>
       <div className="card" style={{marginTop:12}}>家长提示：孩子错了先鼓励再示范一次。</div>
     </div>
