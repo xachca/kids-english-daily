@@ -9,16 +9,24 @@ export default function Daily(){
   useEffect(()=>{ fetchDaily(date).then(setData).catch(e=>setErr(e.message)) },[date])
   if (err) return <div style={{padding:16}}>⚠️ {err}</div>
   if (!data) return <div style={{padding:16}}>Loading…</div>
-  const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+
+  // 关键修改：使用 BASE_URL + new URL 更稳健地拼接图片路径
+  const base = import.meta.env.BASE_URL
+
   return (
     <div style={{padding:16}}>
       <h2>📅 {data.date} · 主题：{data.theme}</h2>
+
       <section>
         <h3>🔤 高频单词</h3>
         <div className="grid">
         {data.words.map(w=> (
           <div className="card" key={w.text}>
-            <img className="img" src={base + w.image} alt={w.text} />
+            <img
+              className="img"
+              src={new URL(w.image.replace(/^\//,''), base).toString()}
+              alt={w.text}
+            />
             <div style={{fontSize:26,fontWeight:700}}>{w.text}</div>
             <button className="btn" onClick={()=>{ say(w.text); toast('Listen and repeat!')}}>🔊 发音</button>
             <div style={{color:'#666',marginTop:8,fontSize:14}}>{w.hint_cn}</div>
@@ -26,6 +34,7 @@ export default function Daily(){
         ))}
         </div>
       </section>
+
       <section>
         <h3>🗣 生活短句</h3>
         <div className="grid">
@@ -37,6 +46,7 @@ export default function Daily(){
         ))}
         </div>
       </section>
+
       <section>
         <h3>💡 家长提示</h3>
         <div className="card">每个词别练太久，1–2 分钟即可，多看图多指物。</div>
