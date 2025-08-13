@@ -10,8 +10,8 @@ export default function Daily(){
   if (err) return <div style={{padding:16}}>⚠️ {err}</div>
   if (!data) return <div style={{padding:16}}>Loading…</div>
 
-  // 关键修改：使用 BASE_URL + new URL 更稳健地拼接图片路径
-  const base = import.meta.env.BASE_URL
+  // 关键修复：把 BASE_URL 转为“绝对地址”，供 new URL 使用
+  const baseAbs = new URL(import.meta.env.BASE_URL, window.location.origin).toString()
 
   return (
     <div style={{padding:16}}>
@@ -24,7 +24,7 @@ export default function Daily(){
           <div className="card" key={w.text}>
             <img
               className="img"
-              src={new URL(w.image.replace(/^\//,''), base).toString()}
+              src={new URL(w.image.replace(/^\//,''), baseAbs).toString()}
               alt={w.text}
             />
             <div style={{fontSize:26,fontWeight:700}}>{w.text}</div>
