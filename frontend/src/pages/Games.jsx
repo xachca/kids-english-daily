@@ -28,8 +28,8 @@ export default function Games(){
     }
   }
 
-  // 关键修改：使用 BASE_URL + new URL 更稳健地拼接图片路径
-  const base = import.meta.env.BASE_URL
+  // 关键修复：BASE_URL 绝对化
+  const baseAbs = new URL(import.meta.env.BASE_URL, window.location.origin).toString()
 
   return (
     <div style={{padding:16}}>
@@ -59,7 +59,7 @@ export default function Games(){
                    style={{border:'2px dashed #ccc', borderRadius:12, padding:8}}>
                    <img
                      className="img"
-                     src={new URL(p.image.replace(/^\//,''), base).toString()}
+                     src={new URL(p.image.replace(/^\//,''), baseAbs).toString()}
                      alt={p.word}
                    />
                    <div style={{textAlign:'center'}}>{p.matched?'✅':'⬇️ 把单词拖到这里'}</div>
@@ -80,3 +80,4 @@ export default function Games(){
     </div>
   )
 }
+
