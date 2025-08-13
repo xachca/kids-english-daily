@@ -31,18 +31,21 @@ jobs:
       - name: Generate daily content (words + Wanx images)
         env:
           TONGYI_API_KEY: ${{ secrets.TONGYI_API_KEY }}
-          WANX_MODEL: wanx2.0-t2i-turbo   # 你要的模型，已设为默认
+          WANX_MODEL: wanx2.0-t2i-turbo
           WANX_IMG_SIZE: 1024*1024
-          TZ: Asia/Shanghai               # 每天北京时间 17:00 更新
+          TZ: Asia/Shanghai
           CHILD_NAME: YaoYao
         run: node scripts/generate_daily.js
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
 
       - name: Install deps & build frontend
         working-directory: frontend
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
         run: |
-          npm ci
+          npm install
           npm run build
 
       - name: Upload artifact
