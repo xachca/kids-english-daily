@@ -1,0 +1,62 @@
+name: Build & Deploy Kids English
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * *'   # 09:00 UTC = 17:00 Asia/Shanghai
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate daily content (words + Wanx images)
+        env:
+          TONGYI_API_KEY: ${{ secrets.TONGYI_API_KEY }}
+          WANX_MODEL: wanx2.0-t2i-turbo   # 你要的模型，已设为默认
+          WANX_IMG_SIZE: 1024*1024
+          TZ: Asia/Shanghai               # 每天北京时间 17:00 更新
+          CHILD_NAME: YaoYao
+        run: node scripts/generate_daily.js
+
+      - name: Install deps & build frontend
+        working-directory: frontend
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
