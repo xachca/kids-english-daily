@@ -32,7 +32,8 @@ jobs:
         env:
           TONGYI_API_KEY: ${{ secrets.TONGYI_API_KEY }}
           WANX_MODEL: wanx2.0-t2i-turbo
-          WANX_IMG_SIZE: 1024*1024
+          WANX_IMG_SIZE: 512*512
+          WANX_WORKSPACE: ${{ secrets.WANX_WORKSPACE }}
           TZ: Asia/Shanghai
           CHILD_NAME: YaoYao
         run: node scripts/generate_daily.js
