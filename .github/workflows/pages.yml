@@ -30,10 +30,14 @@ jobs:
 
       - name: Generate daily content (words + Wanx images)
         env:
-          TONGYI_API_KEY: ${{ secrets.TONGYI_API_KEY }}
-          WANX_MODEL: wanx2.0-t2i-turbo
-          WANX_IMG_SIZE: 512*512
-          WANX_WORKSPACE: ${{ secrets.WANX_WORKSPACE }}
+          IMAGE_PROVIDER: doubao
+          # ---- Doubao / Seedream 3.0 T2I ----
+          DOUBAO_API_BASE: ${{ secrets.DOUBAO_API_BASE }}
+          DOUBAO_API_KEY:  ${{ secrets.DOUBAO_API_KEY }}
+          DOUBAO_AUTH_SCHEME: Bearer            # 如果你的服务商要求 X-API-Key，就改成 X-API-Key
+          DOUBAO_MODEL: seedream-3-0-t2i-250415 # 如控制台给出其他模型名，填实际值
+          DOUBAO_IMG_SIZE: 512x512
+          # ---- 业务信息 ----
           TZ: Asia/Shanghai
           CHILD_NAME: YaoYao
         run: node scripts/generate_daily.js
