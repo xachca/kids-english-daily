@@ -1,49 +1,41 @@
-// scripts/generate_daily.js
-// 提供方适配：provider = "wanx" | "doubao"
-// 通过环境变量 IMAGE_PROVIDER 控制，默认 wanx
-
+// scripts/generate_daily.js  — 支持 IMAGE_PROVIDER = wanx | doubao
 import fs from 'fs'
 import path from 'path'
 
-/** ====== 环境变量 ====== */
-const PROVIDER = (process.env.IMAGE_PROVIDER || 'wanx').toLowerCase()     // "wanx" | "doubao"
+const PROVIDER = (process.env.IMAGE_PROVIDER || 'wanx').toLowerCase()
 const TZ        = process.env.TZ || 'Asia/Shanghai'
 const CHILD     = process.env.CHILD_NAME || 'Kid'
 
-// ---- Ali 万相 (可选) ----
+// ----- Wanx (Ali) -----
 const WANX_API_KEY   = process.env.TONGYI_API_KEY || process.env.DASHSCOPE_API_KEY || ''
 const WANX_MODEL     = process.env.WANX_MODEL || 'wanx2.0-t2i-turbo'
 const WANX_SIZE      = process.env.WANX_IMG_SIZE || '512*512'
 const WANX_WORKSPACE = process.env.WANX_WORKSPACE || ''
 
-// ---- Doubao / Seedream 3.0 T2I ----
-// 说明：不同服务商的接口域名/鉴权略有差异，所以留出可配置项：
-// DOUBAO_API_BASE：完整的 images 生成接口地址（见下文配置）
-// DOUBAO_API_KEY ：API Key（通常放到 Authorization 或 X-API-Key）
-// DOUBAO_AUTH_SCHEME：鉴权方式，"Bearer" | "X-API-Key"，默认 Bearer
-// DOUBAO_MODEL   ：seedream-3-0-t2i-250415 等（按服务商控制台给出的实际模型名）
-const DOUBAO_API_BASE   = process.env.DOUBAO_API_BASE   || ''     // 例如：BytePlus ModelArk 的图片生成 endpoint 地址
-const DOUBAO_API_KEY    = process.env.DOUBAO_API_KEY    || ''
-const DOUBAO_AUTH_SCHEME= (process.env.DOUBAO_AUTH_SCHEME || 'Bearer').trim()
-const DOUBAO_MODEL      = process.env.DOUBAO_MODEL      || 'seedream-3-0-t2i-250415'
-const DOUBAO_SIZE       = process.env.DOUBAO_IMG_SIZE   || '512x512'  // Doubao常见是 "宽x高"
+// ----- Doubao -----
+const DOUBAO_API_BASE    = process.env.DOUBAO_API_BASE   || ''   // 必填：API地址
+const DOUBAO_API_KEY     = process.env.DOUBAO_API_KEY    || ''   // 必填：API Key
+const DOUBAO_AUTH_SCHEME = (process.env.DOUBAO_AUTH_SCHEME || 'Bearer').trim() // Bearer | X-API-Key
+const DOUBAO_MODEL       = process.env.DOUBAO_MODEL      || 'seedream-3-0-t2i-250415'
+const DOUBAO_SIZE        = process.env.DOUBAO_IMG_SIZE   || '512x512'
+const DOUBAO_FLAVOR      = (process.env.DOUBAO_FLAVOR || 'ark').toLowerCase()  // ark | openai
 
-// ---- 目录 ----
+// ----- 目录 -----
 const FRONT_PUBLIC = path.resolve('frontend/public')
 const DAILY_DIR = path.join(FRONT_PUBLIC, 'daily')
 const IMG_ROOT  = path.join(FRONT_PUBLIC, 'images')
 fs.mkdirSync(DAILY_DIR, {recursive:true})
 fs.mkdirSync(IMG_ROOT, {recursive:true})
 
-/** ====== 日期（目标时区） ====== */
+// ----- 日期 -----
 function nowInTZ(){
   const s = new Date().toLocaleString('en-CA', { timeZone: TZ, hour12:false })
   const [datePart] = s.split(',')
-  return { ds: datePart.trim() } // YYYY-MM-DD
+  return { ds: datePart.trim() }
 }
 const { ds } = nowInTZ()
 
-/** ====== 今日主题与词表（略） ====== */
+// ----- 词表（省略不变） -----
 const themes = [
   {"name":"Colors & Fruit","words":[["apple","red"],["banana","yellow"],["grape","purple"],["pear","green"],["orange","orange"]]},
   {"name":"Animals","words":[["cat","black"],["dog","brown"],["duck","yellow"],["fish","blue"],["bird","red"]]},
@@ -58,11 +50,9 @@ const seed = Number(ds.replaceAll('-',''))
 const theme = themes[seed % themes.length]
 const sampled = [...theme.words].sort(()=> Math.random()-0.5).slice(0,4)
 
-/** ====== 工具 ====== */
 const sleep = (ms)=> new Promise(r=> setTimeout(r, ms))
 
 function buildPrompt(word){
-  // 为抽象名词添加可视化锚点；动词自动加“卡通人物做动作”
   const nounHints = {
     rice:  'a small white bowl filled with cooked rice',
     milk:  'a transparent glass filled with milk',
@@ -88,7 +78,6 @@ function svg(word){
     <text x="300" y="350" text-anchor="middle" font-family="Arial" font-size="48" fill="#333">${word}</text>
   </svg>`
 }
-
 function dateImagePath(word){
   const dir = path.join(IMG_ROOT, ds)
   fs.mkdirSync(dir, {recursive:true})
@@ -98,17 +87,16 @@ function dateImagePath(word){
   }
 }
 
-/** ====== 万相调用（保留） ====== */
+/* ------------ Wanx 保留 ------------ */
 async function genWanx(word){
   if (!WANX_API_KEY) return null
-  await sleep(900) // 限速避免429
-
+  await sleep(900)
   const url = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation'
   const payload = { model: WANX_MODEL, input: { prompt: buildPrompt(word) }, parameters: { size: WANX_SIZE, n:1 } }
   const headers = { 'Authorization': `Bearer ${WANX_API_KEY}`, 'Content-Type': 'application/json' }
   if (WANX_WORKSPACE) headers['X-DashScope-WorkSpace'] = WANX_WORKSPACE
 
-  const maxRetry = 4
+  const maxRetry=4
   for (let i=0;i<maxRetry;i++){
     try{
       const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload) })
@@ -130,63 +118,53 @@ async function genWanx(word){
   return null
 }
 
-/** ====== Doubao / Seedream 3.0 T2I 调用 ======
- * 说明：不同服务商（BytePlus/火山引擎/第三方代理）字段略有不同，
- * 这里做了“宽松解析”：
- * - 优先解析 {image_urls:[...]}/{binary_data_base64:[...]}
- * - 其次解析 {data:{result:{images:[{url|base64}]}}}
- * - 其它情况打印前1000字错误体帮助定位
- */
+/* ------------ Doubao 适配层 ------------ */
 async function genDoubao(word){
   if (!DOUBAO_API_BASE || !DOUBAO_API_KEY) return null
   await sleep(900)
 
   const prompt = buildPrompt(word)
+  const headers = { 'Content-Type': 'application/json' }
+  if (DOUBAO_AUTH_SCHEME.toLowerCase() === 'x-api-key') headers['X-API-Key'] = DOUBAO_API_KEY
+  else headers['Authorization'] = `Bearer ${DOUBAO_API_KEY}`
 
-  // 常见两种请求体：
-  // A) OpenAI-like images/generations:
-  //    { model, prompt, size: "512x512", n:1 }
-  // B) ModelArk/BytePlus 样式（有些需要 endpoint 指定的 payload）：
-  //    { model, input: { prompt }, parameters: { size:"512x512", n:1 } }
-  // 我们优先发 A；服务商若不支持 A，请在 DOUBAO_API_BASE 配置他们提供的 images 接口并在后端做适配。
-  const bodyA = { model: DOUBAO_MODEL, prompt, size: DOUBAO_SIZE, n: 1 }
-
-  const headers = {
-    'Content-Type': 'application/json'
-  }
-  if (DOUBAO_AUTH_SCHEME.toLowerCase() === 'x-api-key'){
-    headers['X-API-Key'] = DOUBAO_API_KEY
-  }else{
-    headers['Authorization'] = `Bearer ${DOUBAO_API_KEY}`
-  }
-
-  const maxRetry = 4
+  const maxRetry=4
   for (let i=0;i<maxRetry;i++){
     try{
-      const resp = await fetch(DOUBAO_API_BASE, { method:'POST', headers, body: JSON.stringify(bodyA) })
+      // --- 两种风味 ---
+      let body
+      if (DOUBAO_FLAVOR === 'openai'){
+        // 代理/平台提供 OpenAI images/generations 风格
+        body = { model: DOUBAO_MODEL, prompt, size: DOUBAO_SIZE, n:1 }
+      }else{
+        // 默认 Ark/ModelArk 风格
+        body = { model: DOUBAO_MODEL, input: { prompt }, parameters: { size: DOUBAO_SIZE, n:1 } }
+      }
+
+      const resp = await fetch(DOUBAO_API_BASE, { method:'POST', headers, body: JSON.stringify(body) })
       const text = await resp.text()
       if (resp.ok){
         let data; try{ data = JSON.parse(text) }catch(e){ console.log('doubao json parse err:', e?.message); return null }
         const p = dateImagePath(word)
 
-        // 解析 1：image_urls / binary_data_base64
+        // 解析多种返回形态
         const urls = data?.image_urls || data?.data?.image_urls
         const b64s = data?.binary_data_base64 || data?.data?.binary_data_base64
-        if (urls?.[0]){
-          const r2 = await fetch(urls[0]); const buf = Buffer.from(await r2.arrayBuffer()); fs.writeFileSync(p.abs, buf); return p.rel
-        }
-        if (b64s?.[0]){
-          fs.writeFileSync(p.abs, Buffer.from(b64s[0],'base64')); return p.rel
-        }
+        if (urls?.[0]){ const r2 = await fetch(urls[0]); const buf = Buffer.from(await r2.arrayBuffer()); fs.writeFileSync(p.abs, buf); return p.rel }
+        if (b64s?.[0]){ fs.writeFileSync(p.abs, Buffer.from(b64s[0],'base64')); return p.rel }
 
-        // 解析 2：更通用的 data.result.images[*].{url|base64}
-        const imgs = data?.data?.result?.images || data?.result?.images
+        const imgs = data?.data?.result?.images || data?.result?.images || data?.images
         const first = imgs?.[0]
-        if (first?.url){
-          const r2 = await fetch(first.url); const buf = Buffer.from(await r2.arrayBuffer()); fs.writeFileSync(p.abs, buf); return p.rel
+        if (first?.url){ const r2 = await fetch(first.url); const buf = Buffer.from(await r2.arrayBuffer()); fs.writeFileSync(p.abs, buf); return p.rel }
+        if (first?.base64){ fs.writeFileSync(p.abs, Buffer.from(first.base64,'base64')); return p.rel }
+
+        // OpenAI 风格可能是 data[].b64_json
+        const dataArr = data?.data
+        if (Array.isArray(dataArr) && dataArr[0]?.b64_json){
+          fs.writeFileSync(p.abs, Buffer.from(dataArr[0].b64_json,'base64')); return p.rel
         }
-        if (first?.base64){
-          fs.writeFileSync(p.abs, Buffer.from(first.base64,'base64')); return p.rel
+        if (Array.isArray(dataArr) && dataArr[0]?.url){
+          const r2 = await fetch(dataArr[0].url); const buf = Buffer.from(await r2.arrayBuffer()); fs.writeFileSync(p.abs, buf); return p.rel
         }
 
         console.log('doubao ok but empty for', word, JSON.stringify(data).slice(0,300))
@@ -204,7 +182,7 @@ async function genDoubao(word){
   return null
 }
 
-/** ====== 主流程 ====== */
+/* ------------ 主流程 ------------ */
 async function main(){
   const words = []
   for (const [w] of sampled){
@@ -214,7 +192,7 @@ async function main(){
 
     if(!img){
       const p = dateImagePath(w)
-      fs.writeFileSync(p.absSvg, svg(w)) // 兜底占位图
+      fs.writeFileSync(p.absSvg, svg(w))
       img = p.relSvg
     }
     words.push({ text:w, phonics:'', audio:`/media/tts/${w}.mp3`, image: img, hint_cn:`指着${w}示意；若没有实体，用图片代替` })
@@ -250,6 +228,6 @@ async function main(){
   }
 
   fs.writeFileSync(path.join(DAILY_DIR, `${ds}.json`), JSON.stringify(pack, null, 2), 'utf-8')
-  console.log('DailyPack generated for', ds, 'provider=', PROVIDER)
+  console.log('DailyPack generated for', ds, 'provider=', PROVIDER, 'flavor=', DOUBAO_FLAVOR)
 }
 await main()
