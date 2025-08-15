@@ -2,6 +2,25 @@
 import fs from 'fs'
 import path from 'path'
 
+// ---- 日志工具：把保存结果打印到控制台 & Actions Step Summary ----
+const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+const appendSummary = async (line) => {
+  try {
+    if (summaryPath) await fs.promises.appendFile(summaryPath, line + '\n', 'utf-8');
+  } catch {}
+};
+function logSavedImage({ word, pathRel, source, bytes, note='' }) {
+  const msg = `[img] ${pathRel} <- ${source} (${bytes} bytes) ${note}`.trim();
+  console.log(msg);
+  appendSummary(`- ${word}: ${pathRel}  \`${source}\` (${bytes} bytes) ${note}`);
+}
+function logPlaceholder({ word, pathRel }) {
+  const msg = `[img-fallback] ${pathRel} (SVG placeholder)`;
+  console.log(msg);
+  appendSummary(`- ${word}: ${pathRel} _(placeholder)_`);
+}
+
+
 const PROVIDER = (process.env.IMAGE_PROVIDER || 'wanx').toLowerCase()
 const TZ        = process.env.TZ || 'Asia/Shanghai'
 const CHILD     = process.env.CHILD_NAME || 'Kid'
