@@ -3,11 +3,11 @@ name: Build & Deploy Kids English
 on:
   # 手动运行
   workflow_dispatch:
-  # 每天下午 17:00 Beijing（UTC+8），折算为 09:00 UTC
+  # 每天下午 17:00（北京时间，UTC+8=09:00 UTC）
   schedule:
     - cron: '0 9 * * *'
 
-# 发布 GitHub Pages 需要的权限
+# Pages 发布所需权限
 permissions:
   contents: read
   pages: write
@@ -30,15 +30,15 @@ jobs:
         with:
           node-version: 20
 
-      # 生成每日数据 + 调豆包出图（日志会写入 Step Summary）
+      # 生成每日数据 + 调豆包出图
       - name: Generate daily content (words + images)
         env:
           IMAGE_PROVIDER: doubao
-          # === 下面两个来自 Secrets（Settings → Secrets and variables → Actions）===
-          DOUBAO_API_BASE: ${{ secrets.DOUBAO_API_BASE }}  # 例如 https://ark.cn-beijing.volces.com/api/v3/images
+          # === Secrets（Settings → Secrets and variables → Actions）===
+          DOUBAO_API_BASE: ${{ secrets.DOUBAO_API_BASE }}  # 例： https://ark.cn-beijing.volces.com/api/v3/images
           DOUBAO_API_KEY:  ${{ secrets.DOUBAO_API_KEY }}
           # === 其它可调参数 ===
-          DOUBAO_AUTH_SCHEME: Bearer       # 如果你的网关是 X-API-Key，请填 X-API-Key
+          DOUBAO_AUTH_SCHEME: Bearer       # 若你的网关要求 X-API-Key，请改为 X-API-Key
           DOUBAO_MODEL: seedream-3-0-t2i-250415
           DOUBAO_IMG_SIZE: 512x512
           DOUBAO_FLAVOR: ark               # ark | openai
@@ -49,10 +49,11 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      # ✅ 这里改为 npm install（最简单稳定）
       - name: Install deps & build frontend
         run: |
           cd frontend
-          npm ci
+          npm install
           npm run build
 
       - name: Upload artifact
