@@ -31,16 +31,18 @@ jobs:
       - name: Generate daily content (words + Wanx images)
         env:
           IMAGE_PROVIDER: doubao
-          # ---- Doubao / Seedream 3.0 T2I ----
+          # ---- Doubao ----
           DOUBAO_API_BASE: ${{ secrets.DOUBAO_API_BASE }}
           DOUBAO_API_KEY:  ${{ secrets.DOUBAO_API_KEY }}
-          DOUBAO_AUTH_SCHEME: Bearer            # 如果你的服务商要求 X-API-Key，就改成 X-API-Key
-          DOUBAO_MODEL: seedream-3-0-t2i-250415 # 如控制台给出其他模型名，填实际值
+          DOUBAO_AUTH_SCHEME: Bearer       # 如果平台要求 X-API-Key 就填 X-API-Key
+          DOUBAO_MODEL: seedream-3-0-t2i-250415
           DOUBAO_IMG_SIZE: 512x512
-          # ---- 业务信息 ----
+          DOUBAO_FLAVOR: ark               # ark | openai
+          # ---- Site settings ----
           TZ: Asia/Shanghai
           CHILD_NAME: YaoYao
         run: node scripts/generate_daily.js
+
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
