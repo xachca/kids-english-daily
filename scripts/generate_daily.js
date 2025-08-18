@@ -157,6 +157,7 @@ async function genDoubao(word){
   if (!DOUBAO_API_KEY)  { logSkip('DOUBAO_API_KEY is empty');  return null }
 
   await sleep(900)
+  console.log('[doubao-call]', { flavor: DOUBAO_FLAVOR, url: DOUBAO_API_BASE, model: DOUBAO_MODEL, size: DOUBAO_SIZE, auth: DOUBAO_AUTH_SCHEME })
   const prompt = buildPrompt(word)
   const headers = { 'Content-Type': 'application/json' }
   if (DOUBAO_AUTH_SCHEME.toLowerCase() === 'x-api-key') headers['X-API-Key'] = DOUBAO_API_KEY
