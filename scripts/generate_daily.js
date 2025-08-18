@@ -171,7 +171,7 @@ async function genDoubao(word){
       if (DOUBAO_FLAVOR === 'openai'){
         body = { model: DOUBAO_MODEL, prompt, size: DOUBAO_SIZE, n:1 }
       }else{
-        body = { model: DOUBAO_MODEL, input: { prompt }, parameters: { size: DOUBAO_SIZE, n:1 } }
+        body = { model: DOUBAO_MODEL, input: { prompt }, parameters: { size: DOUBAO_SIZE, n: 1, image_count: 1 }  }
       }
 
       const resp = await fetch(DOUBAO_API_BASE, { method:'POST', headers, body: JSON.stringify(body) })
