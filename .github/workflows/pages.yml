@@ -38,7 +38,7 @@ jobs:
           DOUBAO_API_BASE: ${{ secrets.DOUBAO_API_BASE }}  # 例： https://ark.cn-beijing.volces.com/api/v3/images
           DOUBAO_API_KEY:  ${{ secrets.DOUBAO_API_KEY }}
           # === 其它可调参数 ===
-          DOUBAO_AUTH_SCHEME: Bearer       # 若你的网关要求 X-API-Key，请改为 X-API-Key
+          DOUBAO_AUTH_SCHEME: X-API-Key       # 若你的网关要求 X-API-Key，请改为 X-API-Key
           DOUBAO_MODEL: seedream-3-0-t2i-250415
           DOUBAO_IMG_SIZE: 512x512
           DOUBAO_FLAVOR: ark               # ark | openai
