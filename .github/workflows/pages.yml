@@ -36,9 +36,9 @@ jobs:
           IMAGE_PROVIDER: doubao
 
           # ====== Doubao 必填 ======
-          DOUBAO_API_BASE: https://ark.cn-beijing.volces.com/api/v3/images/generations
+          DOUBAO_API_BASE: https://ark.cn-beijing.volces.com/api/v3
           DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
-          DOUBAO_AUTH_SCHEME: Bearer            # ← 一定是 Bearer
+          DOUBAO_AUTH_SCHEME: X-API-Key
           DOUBAO_MODEL: doubao-seedream-3-0-t2i-250415
           DOUBAO_IMG_SIZE: 512x512
           DOUBAO_FLAVOR: ark                    # ark | openai 二选一，Ark 控制台一般用 ark
