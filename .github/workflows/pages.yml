@@ -34,14 +34,15 @@ jobs:
       - name: Generate daily content (words + images)
         env:
           IMAGE_PROVIDER: doubao
-          # === Secrets（Settings → Secrets and variables → Actions）===
-          DOUBAO_API_BASE: ${{ secrets.DOUBAO_API_BASE }}  # 例： https://ark.cn-beijing.volces.com/api/v3/images
+
+          DOUBAO_API_BASE: ${{ secrets.DOUBAO_API_BASE }}   # 例如：https://ark.cn-beijing.volces.com/api/v3
           DOUBAO_API_KEY:  ${{ secrets.DOUBAO_API_KEY }}
-          # === 其它可调参数 ===
-          DOUBAO_AUTH_SCHEME: X-API-Key       # 若你的网关要求 X-API-Key，请改为 X-API-Key
+          DOUBAO_AUTH_SCHEME: Bearer
+
+          # 其他参数
           DOUBAO_MODEL: doubao-seedream-3-0-t2i-250415
           DOUBAO_IMG_SIZE: 512x512
-          DOUBAO_FLAVOR: ark               # ark | openai
+          DOUBAO_FLAVOR: ark            # 保持 ark
           TZ: Asia/Shanghai
           CHILD_NAME: YaoYao
         run: node scripts/generate_daily.js
@@ -49,7 +50,6 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      # ✅ 这里改为 npm install（最简单稳定）
       - name: Install deps & build frontend
         run: |
           cd frontend
