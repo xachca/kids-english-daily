@@ -20,12 +20,13 @@ const WANX_SIZE      = process.env.WANX_IMG_SIZE || '512*512'
 const WANX_WORKSPACE = process.env.WANX_WORKSPACE || ''
 
 // --- Doubao (Seedream 3.0 T2I) ---
-const DOUBAO_API_BASE    = (process.env.DOUBAO_API_BASE   || '').trim()
-const DOUBAO_API_KEY     = (process.env.DOUBAO_API_KEY    || '').trim()
+const DOUBAO_API_BASE    = process.env.DOUBAO_API_BASE   || 'https://ark.cn-beijing.volces.com/api/v3/images/generations'
+const DOUBAO_API_KEY     = process.env.DOUBAO_API_KEY    || ''
 const DOUBAO_AUTH_SCHEME = (process.env.DOUBAO_AUTH_SCHEME || 'Bearer').trim() // "Bearer" | "X-API-Key"
 const DOUBAO_MODEL       = process.env.DOUBAO_MODEL      || 'doubao-seedream-3-0-t2i-250415'
 const DOUBAO_SIZE        = process.env.DOUBAO_IMG_SIZE   || '512x512'
 const DOUBAO_FLAVOR      = (process.env.DOUBAO_FLAVOR || 'ark').toLowerCase()  // "ark" | "openai"
+
 
 // --- Directories ---
 const FRONT_PUBLIC = path.resolve('frontend/public')
