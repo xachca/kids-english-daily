@@ -157,76 +157,95 @@ async function genDoubao(word){
   if (!DOUBAO_API_KEY)  { logSkip('DOUBAO_API_KEY is empty');  return null }
 
   await sleep(900)
-  console.log('[doubao-call]', { flavor: DOUBAO_FLAVOR, url: DOUBAO_API_BASE, model: DOUBAO_MODEL, size: DOUBAO_SIZE, auth: DOUBAO_AUTH_SCHEME })
+
   const prompt = buildPrompt(word)
+
+  // 认证头：优先 X-API-Key；如你在 workflow 里配置 DOUBAO_AUTH_SCHEME=X-API-Key，也会走这个分支
   const headers = { 'Content-Type': 'application/json' }
-  if (DOUBAO_AUTH_SCHEME.toLowerCase() === 'x-api-key') headers['X-API-Key'] = DOUBAO_API_KEY
-  else headers['Authorization'] = `Bearer ${DOUBAO_API_KEY}`
+  if ((DOUBAO_AUTH_SCHEME || '').toLowerCase() === 'x-api-key') {
+    headers['X-API-Key'] = DOUBAO_API_KEY
+  } else {
+    // 默认也尝试先用 X-API-Key，不行再用 Bearer（某些租户只认 X-API-Key）
+    headers['X-API-Key'] = DOUBAO_API_KEY
+  }
 
-  const maxRetry=4
-  for (let i=0;i<maxRetry;i++){
-    try{
-      // 两种风味：openai vs ark
-      let body
-      if (DOUBAO_FLAVOR === 'openai'){
-        body = { model: DOUBAO_MODEL, prompt, size: DOUBAO_SIZE, n:1 }
-      }else{
-        body = { model: DOUBAO_MODEL, input: { prompt }, parameters: { size: DOUBAO_SIZE, n: 1, image_count: 1 }  }
-      }
+  // Ark & OpenAI 兼容两种风味的 payload
+  const bodyArk   = { model: DOUBAO_MODEL, input: { prompt }, parameters: { size: DOUBAO_SIZE, n: 1 } }
+  const bodyOpen  = { model: DOUBAO_MODEL, prompt, size: DOUBAO_SIZE, n: 1 }
 
-      const resp = await fetch(DOUBAO_API_BASE, { method:'POST', headers, body: JSON.stringify(body) })
+  // 依次尝试多个常见 endpoint（以 DOUBAO_API_BASE 为根）
+  const endpoints = [
+    { path: '/images',              flavor: 'ark',   body: bodyArk },
+    { path: '/images/generations',  flavor: 'open',  body: bodyOpen },
+    { path: '/text2image',          flavor: 'ark',   body: bodyArk },
+  ]
+
+  for (const ep of endpoints) {
+    const url = DOUBAO_API_BASE.replace(/\/+$/, '') + ep.path
+    try {
+      console.log('[doubao-call]', { url, flavor: ep.flavor, model: DOUBAO_MODEL, size: DOUBAO_SIZE, auth: headers['X-API-Key'] ? 'X-API-Key' : 'Bearer' })
+      const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(ep.body) })
       const text = await resp.text()
-      if (resp.ok){
-        let data; try{ data = JSON.parse(text) }catch(e){ console.log('doubao json parse err:', e?.message); return null }
-        const p = dateImagePath(word)
 
-        // 形态1：image_urls / binary_data_base64
-        const urls = data?.image_urls || data?.data?.image_urls
-        const b64s = data?.binary_data_base64 || data?.data?.binary_data_base64
-        if (urls?.[0]){
-          const r2  = await fetch(urls[0]); const ab = await r2.arrayBuffer(); const buf = Buffer.from(ab)
-          fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:url', bytes: buf.length }); return p.rel
-        }
-        if (b64s?.[0]){
-          const buf = Buffer.from(b64s[0], 'base64')
-          fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:base64', bytes: buf.length }); return p.rel
-        }
-
-        // 形态2：data.result.images[*].{url|base64} / result.images / images
-        const imgs = data?.data?.result?.images || data?.result?.images || data?.images
-        const first = imgs?.[0]
-        if (first?.url){
-          const r2  = await fetch(first.url); const ab = await r2.arrayBuffer(); const buf = Buffer.from(ab)
-          fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:url', bytes: buf.length }); return p.rel
-        }
-        if (first?.base64){
-          const buf = Buffer.from(first.base64, 'base64')
-          fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:base64', bytes: buf.length }); return p.rel
-        }
-
-        // 形态3（OpenAI兼容）：data[].b64_json 或 url
-        const dataArr = data?.data
-        if (Array.isArray(dataArr) && dataArr[0]?.b64_json){
-          const buf = Buffer.from(dataArr[0].b64_json, 'base64')
-          fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:b64_json', bytes: buf.length }); return p.rel
-        }
-        if (Array.isArray(dataArr) && dataArr[0]?.url){
-          const r2  = await fetch(dataArr[0].url); const ab = await r2.arrayBuffer(); const buf = Buffer.from(ab)
-          fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:url(openai)', bytes: buf.length }); return p.rel
-        }
-
-        console.log('doubao ok but empty for', word, JSON.stringify(data).slice(0,300))
-        return null
-      }else{
-        console.log(`[doubao-http] ${resp.status} "${word}" ->`, text.slice(0,1000))
-        if (resp.status===429 || resp.status>=500){ await sleep(1200*Math.pow(2,i)); continue }
-        return null
+      if (!resp.ok) {
+        console.log(`[doubao-http] ${resp.status} "${word}" -> ${text.slice(0, 1000)}`)
+        // 404/405/400 类错误：试下一个 endpoint
+        if (resp.status >= 500) { await sleep(1200); }
+        continue
       }
-    }catch(e){
+
+      // 尝试解析多种返回结构
+      let data; try { data = JSON.parse(text) } catch(e) {
+        console.log('doubao json parse err:', e?.message)
+        continue
+      }
+
+      const p = dateImagePath(word)
+
+      // 形态1：image_urls / binary_data_base64
+      const urls = data?.image_urls || data?.data?.image_urls
+      const b64s = data?.binary_data_base64 || data?.data?.binary_data_base64
+      if (urls?.[0]) {
+        const r2  = await fetch(urls[0]); const ab = await r2.arrayBuffer(); const buf = Buffer.from(ab)
+        fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:url', bytes: buf.length }); return p.rel
+      }
+      if (b64s?.[0]) {
+        const buf = Buffer.from(b64s[0], 'base64')
+        fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:base64', bytes: buf.length }); return p.rel
+      }
+
+      // 形态2：data.result.images[*].{url|base64} / result.images / images
+      const imgs = data?.data?.result?.images || data?.result?.images || data?.images
+      const first = imgs?.[0]
+      if (first?.url) {
+        const r2  = await fetch(first.url); const ab = await r2.arrayBuffer(); const buf = Buffer.from(ab)
+        fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:url', bytes: buf.length }); return p.rel
+      }
+      if (first?.base64) {
+        const buf = Buffer.from(first.base64, 'base64')
+        fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:base64', bytes: buf.length }); return p.rel
+      }
+
+      // 形态3（OpenAI 兼容）：data[].b64_json 或 url
+      const dataArr = data?.data
+      if (Array.isArray(dataArr) && dataArr[0]?.b64_json) {
+        const buf = Buffer.from(dataArr[0].b64_json, 'base64')
+        fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:b64_json', bytes: buf.length }); return p.rel
+      }
+      if (Array.isArray(dataArr) && dataArr[0]?.url) {
+        const r2  = await fetch(dataArr[0].url); const ab = await r2.arrayBuffer(); const buf = Buffer.from(ab)
+        fs.writeFileSync(p.abs, buf); logSavedImage({ word, pathRel: p.rel, source: 'doubao:url(openai)', bytes: buf.length }); return p.rel
+      }
+
+      console.log('doubao ok but empty for', word, JSON.stringify(data).slice(0, 300))
+      // 本 endpoint 解析不到图片，继续试下一个
+    } catch (e) {
       console.log('[doubao-err]', e?.message || e)
-      await sleep(1000*Math.pow(2,i))
+      await sleep(1000)
     }
   }
+
+  // 全部 endpoint 都失败
   return null
 }
 
