@@ -263,7 +263,7 @@ async function main(){
     let img = null
     if (PROVIDER === 'doubao') img = await genDoubao(w)
     else if (PROVIDER === 'wanx') img = await genWanx(w)
-    else { logSkip(\`unknown provider "\${PROVIDER}"\`); }
+    else { logSkip('unknown provider "' + PROVIDER + '"'); }
 
     if(!img){
       const p = dateImagePath(w)
@@ -271,7 +271,7 @@ async function main(){
       logPlaceholder({ word: w, pathRel: p.relSvg })
       img = p.relSvg
     }
-    words.push({ text:w, phonics:'', audio:\`/media/tts/\${w}.mp3\`, image: img, hint_cn:\`指着\${w}示意；若没有实体，用图片代替\` })
+    words.push({ text:w, phonics:'', audio:`/media/tts/${w}.mp3`, image: img, hint_cn:`指着${w}示意；若没有实体，用图片代替` })
   }
 
   const pack = {
