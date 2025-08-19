@@ -35,16 +35,24 @@ jobs:
         env:
           IMAGE_PROVIDER: doubao
 
-          DOUBAO_API_BASE: ${{ secrets.DOUBAO_API_BASE }}   # 例如：https://ark.cn-beijing.volces.com/api/v3
-          DOUBAO_API_KEY:  ${{ secrets.DOUBAO_API_KEY }}
-          DOUBAO_AUTH_SCHEME: Bearer
-
-          # 其他参数
+          # ====== Doubao 必填 ======
+          DOUBAO_API_BASE: https://ark.cn-beijing.volces.com/api/v3/images/generations
+          DOUBAO_API_KEY: ${{ secrets.DOUBAO_API_KEY }}
+          DOUBAO_AUTH_SCHEME: Bearer            # ← 一定是 Bearer
           DOUBAO_MODEL: doubao-seedream-3-0-t2i-250415
           DOUBAO_IMG_SIZE: 512x512
-          DOUBAO_FLAVOR: ark            # 保持 ark
+          DOUBAO_FLAVOR: ark                    # ark | openai 二选一，Ark 控制台一般用 ark
+
+          # ====== 其他 ======
           TZ: Asia/Shanghai
           CHILD_NAME: YaoYao
+
+          # 可选：Wanx 作为兜底（没配置 Key 就不会用）
+          TONGYI_API_KEY: ${{ secrets.TONGYI_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          WANX_MODEL: wanx2.0-t2i-turbo
+          WANX_IMG_SIZE: 512*512
+          WANX_WORKSPACE: ${{ secrets.WANX_WORKSPACE }}
         run: node scripts/generate_daily.js
 
       - name: Configure Pages
