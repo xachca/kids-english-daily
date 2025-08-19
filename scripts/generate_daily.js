@@ -20,20 +20,23 @@ const WANX_SIZE      = process.env.WANX_IMG_SIZE || '512*512'
 const WANX_WORKSPACE = process.env.WANX_WORKSPACE || ''
 
 // --- Doubao (Seedream 3.0 T2I) ---
-const DOUBAO_API_BASE    = process.env.DOUBAO_API_BASE   || 'https://ark.cn-beijing.volces.com/api/v3/images/generations'
-const DOUBAO_API_KEY     = process.env.DOUBAO_API_KEY    || ''
-const DOUBAO_AUTH_SCHEME = (process.env.DOUBAO_AUTH_SCHEME || 'Bearer').trim() // "Bearer" | "X-API-Key"
-const DOUBAO_MODEL       = process.env.DOUBAO_MODEL      || 'doubao-seedream-3-0-t2i-250415'
-const DOUBAO_SIZE        = process.env.DOUBAO_IMG_SIZE   || '512x512'
-const DOUBAO_FLAVOR      = (process.env.DOUBAO_FLAVOR || 'ark').toLowerCase()  // "ark" | "openai"
-
+/**
+ * ！！注意：这里使用“根地址”/api/v3，不要自带 /images
+ * 正确： https://ark.cn-beijing.volces.com/api/v3
+ */
+const DOUBAO_API_BASE    = (process.env.DOUBAO_API_BASE || 'https://ark.cn-beijing.volces.com/api/v3').replace(/\/+$/, '')
+const DOUBAO_API_KEY     = process.env.DOUBAO_API_KEY || ''
+const DOUBAO_AUTH_SCHEME = (process.env.DOUBAO_AUTH_SCHEME || 'X-API-Key').trim() // "X-API-Key" | "Bearer"
+const DOUBAO_MODEL       = process.env.DOUBAO_MODEL || 'doubao-seedream-3-0-t2i-250415'
+const DOUBAO_SIZE        = process.env.DOUBAO_IMG_SIZE || '512x512'
+const DOUBAO_FLAVOR      = (process.env.DOUBAO_FLAVOR || 'ark').toLowerCase()    // "ark" | "openai"
 
 // --- Directories ---
 const FRONT_PUBLIC = path.resolve('frontend/public')
 const DAILY_DIR = path.join(FRONT_PUBLIC, 'daily')
 const IMG_ROOT  = path.join(FRONT_PUBLIC, 'images')
-fs.mkdirSync(DAILY_DIR, {recursive:true})
-fs.mkdirSync(IMG_ROOT, {recursive:true})
+fs.mkdirSync(DAILY_DIR, { recursive: true })
+fs.mkdirSync(IMG_ROOT, { recursive: true })
 
 // ====== DATE ======
 function nowInTZ(){
@@ -62,7 +65,6 @@ const sampled = [...theme.words].sort(()=> Math.random()-0.5).slice(0,4)
 const sleep = (ms)=> new Promise(r=> setTimeout(r, ms))
 
 function buildPrompt(word){
-  // visual anchors for abstract nouns
   const nounHints = {
     rice:  'a small white bowl filled with cooked rice',
     milk:  'a transparent glass filled with milk',
@@ -91,7 +93,7 @@ function svg(word){
 function dateImagePath(word){
   const dir = path.join(IMG_ROOT, ds)
   fs.mkdirSync(dir, {recursive:true})
-  return { 
+  return {
     abs: path.join(dir, `${word}.jpg`), rel: `/images/${ds}/${word}.jpg`,
     absSvg: path.join(dir, `${word}.svg`), relSvg: `/images/${ds}/${word}.svg`
   }
@@ -154,19 +156,16 @@ async function genWanx(word){
 
 // ====== Doubao provider (real API) ======
 async function genDoubao(word){
-  if (!DOUBAO_API_BASE) { logSkip('DOUBAO_API_BASE is empty'); return null }
   if (!DOUBAO_API_KEY)  { logSkip('DOUBAO_API_KEY is empty');  return null }
 
   await sleep(900)
-
   const prompt = buildPrompt(word)
 
-  // 认证头：优先 X-API-Key；如你在 workflow 里配置 DOUBAO_AUTH_SCHEME=X-API-Key，也会走这个分支
+  // 认证头（默认使用 X-API-Key；若显式指定 Bearer 则改为 Bearer）
   const headers = { 'Content-Type': 'application/json' }
-  if ((DOUBAO_AUTH_SCHEME || '').toLowerCase() === 'x-api-key') {
-    headers['X-API-Key'] = DOUBAO_API_KEY
+  if (DOUBAO_AUTH_SCHEME.toLowerCase() === 'bearer') {
+    headers['Authorization'] = `Bearer ${DOUBAO_API_KEY}`
   } else {
-    // 默认也尝试先用 X-API-Key，不行再用 Bearer（某些租户只认 X-API-Key）
     headers['X-API-Key'] = DOUBAO_API_KEY
   }
 
@@ -174,7 +173,7 @@ async function genDoubao(word){
   const bodyArk   = { model: DOUBAO_MODEL, input: { prompt }, parameters: { size: DOUBAO_SIZE, n: 1 } }
   const bodyOpen  = { model: DOUBAO_MODEL, prompt, size: DOUBAO_SIZE, n: 1 }
 
-  // 依次尝试多个常见 endpoint（以 DOUBAO_API_BASE 为根）
+  // 依次尝试三个常见 endpoint（在基地址 /api/v3 下挂载）
   const endpoints = [
     { path: '/images',              flavor: 'ark',   body: bodyArk },
     { path: '/images/generations',  flavor: 'open',  body: bodyOpen },
@@ -182,7 +181,7 @@ async function genDoubao(word){
   ]
 
   for (const ep of endpoints) {
-    const url = DOUBAO_API_BASE.replace(/\/+$/, '') + ep.path
+    const url = DOUBAO_API_BASE + ep.path
     try {
       console.log('[doubao-call]', { url, flavor: ep.flavor, model: DOUBAO_MODEL, size: DOUBAO_SIZE, auth: headers['X-API-Key'] ? 'X-API-Key' : 'Bearer' })
       const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(ep.body) })
@@ -190,12 +189,11 @@ async function genDoubao(word){
 
       if (!resp.ok) {
         console.log(`[doubao-http] ${resp.status} "${word}" -> ${text.slice(0, 1000)}`)
-        // 404/405/400 类错误：试下一个 endpoint
-        if (resp.status >= 500) { await sleep(1200); }
+        if (resp.status >= 500) await sleep(1200)
         continue
       }
 
-      // 尝试解析多种返回结构
+      // 解析多种返回结构
       let data; try { data = JSON.parse(text) } catch(e) {
         console.log('doubao json parse err:', e?.message)
         continue
@@ -265,7 +263,7 @@ async function main(){
     let img = null
     if (PROVIDER === 'doubao') img = await genDoubao(w)
     else if (PROVIDER === 'wanx') img = await genWanx(w)
-    else { logSkip(`unknown provider "${PROVIDER}"`); }
+    else { logSkip(\`unknown provider "\${PROVIDER}"\`); }
 
     if(!img){
       const p = dateImagePath(w)
@@ -273,23 +271,23 @@ async function main(){
       logPlaceholder({ word: w, pathRel: p.relSvg })
       img = p.relSvg
     }
-    words.push({ text:w, phonics:'', audio:`/media/tts/${w}.mp3`, image: img, hint_cn:`指着${w}示意；若没有实体，用图片代替` })
+    words.push({ text:w, phonics:'', audio:\`/media/tts/\${w}.mp3\`, image: img, hint_cn:\`指着\${w}示意；若没有实体，用图片代替\` })
   }
 
   const pack = {
     date: ds, child_profile: { name: CHILD, interests: [] }, theme: theme.name,
     words,
     sentences: [
-      { text:`I see a ${words[0].text}.`, audio:`/media/tts/sent1.mp3`, scene_anim:`/anim/${words[0].text}.json` },
-      { text:`The ${words[1].text} is nice.`, audio:`/media/tts/sent2.mp3`, scene_anim:`/anim/${words[1].text}.json` },
+      { text:\`I see a \${words[0].text}.\`, audio:'/media/tts/sent1.mp3', scene_anim:\`/anim/\${words[0].text}.json\` },
+      { text:\`The \${words[1].text} is nice.\`, audio:'/media/tts/sent2.mp3', scene_anim:\`/anim/\${words[1].text}.json\` },
     ],
     story: {
-      title: `${words[0].text[0].toUpperCase()+words[0].text.slice(1)} & ${words[1].text[0].toUpperCase()+words[1].text.slice(1)}`,
+      title: \`\${words[0].text[0].toUpperCase()+words[0].text.slice(1)} & \${words[1].text[0].toUpperCase()+words[1].text.slice(1)}\`,
       script_lines:[
-        `${CHILD} sees a ${words[0].text}.`,
-        `${CHILD} sees a ${words[1].text}.`,
-        `Hello, ${words[0].text}! Hello, ${words[1].text}!`,
-        `Yummy ${words[0].text}. Yummy ${words[1].text}!`
+        \`\${CHILD} sees a \${words[0].text}.\`,
+        \`\${CHILD} sees a \${words[1].text}.\`,
+        \`Hello, \${words[0].text}! Hello, \${words[1].text}!\`,
+        \`Yummy \${words[0].text}. Yummy \${words[1].text}!\`
       ],
       line_audios:['/media/tts/story1.mp3','/media/tts/story2.mp3','/media/tts/story3.mp3','/media/tts/story4.mp3']
     },
@@ -299,8 +297,8 @@ async function main(){
       { type:'find-it', title:'找一找颜色', prompt:'Find something red at home!', success_feedback:'You found it! Awesome!' }
     ],
     parent_cards:[
-      { cn:`指着${words[0].text}说：This is a ${words[0].text}.`, en:`This is a ${words[0].text}.`, tip:'慢速清晰，指物' },
-      { cn:`问：Do you like ${words[1].text}?`, en:`Do you like ${words[1].text}?`, tip:'引导回答 Yes / No' },
+      { cn:\`指着\${words[0].text}说：This is a \${words[0].text}.\`, en:\`This is a \${words[0].text}.\`, tip:'慢速清晰，指物' },
+      { cn:\`问：Do you like \${words[1].text}?\`, en:\`Do you like \${words[1].text}?\`, tip:'引导回答 Yes / No' },
       { cn:'一起找房间里的颜色', en:'Let’s find colors in the room!', tip:'把找到的东西排一排复习' }
     ]
   }
@@ -310,3 +308,4 @@ async function main(){
   appendSummary(`\n> ✅ DailyPack generated for **${ds}**`)
 }
 await main()
+
